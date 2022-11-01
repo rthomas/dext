@@ -1,5 +1,5 @@
 [package]
-name = "docker-extract"
+name = "dext"
 version = "0.1.0"
 edition = "2021"
 authors = ["Ryan Thomas <ryan@ryant.org>"]

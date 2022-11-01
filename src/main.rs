@@ -14,7 +14,7 @@ use tar::Archive;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
-    name = "Docker Extract",
+    name = "dext",
     about = "Extracts a docker image's layers to a specified location.",
     author = env!("CARGO_PKG_AUTHORS"),
 )]

@@ -3,9 +3,9 @@ name = "docker-extract"
 version = "0.1.0"
 edition = "2021"
 authors = ["Ryan Thomas <ryan@ryant.org>"]
+license = "GPL-3.0"
 license-file = "LICENSE"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+repository = "https://github.com/rthomas/docker_extract"
 
 [dependencies]
 anyhow = "1.0.66"

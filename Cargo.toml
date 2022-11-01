@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["Ryan Thomas <ryan@ryant.org>"]
 license = "GPL-3.0"
 repository = "https://github.com/rthomas/docker_extract"
+description = "A CLI tool to extract and unpack the layers of a docker image."
 
 [dependencies]
 anyhow = "1.0.66"

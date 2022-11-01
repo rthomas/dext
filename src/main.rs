@@ -38,7 +38,7 @@ struct Opts {
     write_entrypoint: bool,
 
     /// Entrypoint file name, relative to out_path.
-    #[structopt(default_value = "entrypoint.sh")]
+    #[structopt(short = "-f", long = "entry-file", default_value = "entrypoint.sh")]
     entrypoint: String,
 }
 

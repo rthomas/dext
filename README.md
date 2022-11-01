@@ -6,7 +6,7 @@ A CLI tool to extract the layers of a local `docker` image and overlay the conte
 Extracts a docker image's layers to a specified location.
 
 USAGE:
-    docker-extract [FLAGS] [OPTIONS] <image-name> <out-path>
+    dext [FLAGS] [OPTIONS] <image-name> <out-path>
 
 FLAGS:
     -h, --help          Prints help information

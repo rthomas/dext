@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use bollard::Docker;
 use futures_util::{future::ready, StreamExt};
-use log::debug;
+use log::{debug, error};
 use serde::Deserialize;
 use std::{
     fs::{self, File},
@@ -20,12 +20,17 @@ use tar::Archive;
 )]
 struct Opts {
     /// Docker image name
-    image_name: String,
+    #[structopt(short = "i", long = "image")]
+    image_name: Option<String>,
 
     /// Docker image version
     // If not specified will default to 'latest'.
     #[structopt(short = "v", long = "version", default_value = "latest")]
     image_version: String,
+
+    /// Image archive file (.tar)
+    #[structopt(short = "f", long = "file")]
+    image_file: Option<PathBuf>,
 
     /// Output folder
     // Location that must be a folder to write all of the image layers.
@@ -38,7 +43,7 @@ struct Opts {
     write_entrypoint: bool,
 
     /// Entrypoint file name, relative to out_path.
-    #[structopt(short = "-f", long = "entry-file", default_value = "entrypoint.sh")]
+    #[structopt(long = "entry-file", default_value = "entrypoint.sh")]
     entrypoint: String,
 }
 
@@ -48,11 +53,6 @@ async fn main() -> Result<()> {
 
     let opts = Opts::from_args();
 
-    let image_name = format!("{}:{}", opts.image_name, opts.image_version);
-
-    if !image_name.contains(":") {
-        bail!("image name must be of the format: name:version");
-    }
     if !opts.out_path.is_dir() {
         bail!(
             "location specified is not a directory: {}",
@@ -62,7 +62,29 @@ async fn main() -> Result<()> {
 
     let tmp = tempdir::TempDir::new("image-builder")?;
     debug!("temp dir: {}", tmp.path().to_string_lossy());
-    let manifest = extract_layers(&image_name, &opts.out_path, tmp.path()).await?;
+    let tar_path = {
+        match (opts.image_name, opts.image_file) {
+            (Some(image_name), None) => {
+                if image_name.contains(":") {
+                    bail!("image name should be the name only - use the --version flag to specify a version.");
+                }
+
+                let image = format!("{}:{}", image_name, opts.image_version);
+
+                fetch_archive(tmp.path(), &image).await?
+            }
+            (None, Some(tar_path)) => tar_path,
+            (Some(_), Some(_)) => {
+                error!("cannot specify both image name and image file.");
+                bail!("you cannot specify both an image name as well as an image file.")
+            }
+            (None, None) => {
+                error!("not enough arguments specified.");
+                bail!("you must specify either an image name or an archive path.")
+            }
+        }
+    };
+    let manifest = extract_layers(&tar_path, &opts.out_path, tmp.path()).await?;
 
     if opts.write_entrypoint {
         write_entrypoint(&manifest, tmp.path(), &opts.out_path, opts.entrypoint)?;
@@ -71,17 +93,20 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn extract_layers(image_name: &str, out_path: &Path, tmp: &Path) -> Result<Manifest> {
-    let tar_name = format!("{image_name}.tar");
+async fn fetch_archive(tmp: &Path, image: &str) -> Result<PathBuf> {
+    let tar_name = format!("{image}.tar");
     let mut tar_path = PathBuf::new();
     tar_path.push(&tmp);
     tar_path.push(&tar_name);
     debug!("tar file: {}", tar_path.to_string_lossy());
 
     let docker = Docker::connect_with_local_defaults()?;
-    let byte_stream = docker.export_image(image_name);
+    // Make sure the image is there.
+    docker.inspect_image(image).await?;
 
-    debug!("exporting image: {image_name}");
+    let byte_stream = docker.export_image(image);
+
+    debug!("exporting image: {image}");
     let mut writer = BufWriter::new(File::create(&tar_path)?);
     byte_stream
         .for_each(move |data| {
@@ -93,12 +118,15 @@ async fn extract_layers(image_name: &str, out_path: &Path, tmp: &Path) -> Result
         })
         .await;
 
-    {
-        let reader = BufReader::new(File::open(&tar_path)?);
-        let mut archive = Archive::new(reader);
-        debug!("unpacking archive: {}", tar_path.to_string_lossy());
-        archive.unpack(&tmp)?;
-    }
+    Ok(tar_path)
+}
+
+async fn extract_layers(tar_path: &Path, out_path: &Path, tmp: &Path) -> Result<Manifest> {
+    let reader = BufReader::new(File::open(tar_path)?);
+    let mut archive = Archive::new(reader);
+    debug!("unpacking archive: {}", tar_path.to_string_lossy());
+    archive.unpack(&tmp)?;
+
     fs::remove_file(&tar_path)?;
 
     let mut mf_path = PathBuf::new();
